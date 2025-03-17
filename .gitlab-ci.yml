@@ -1,0 +1,60 @@
+image: python:3.12
+
+variables:
+  PIP_CACHE_DIR: $CI_PROJECT_DIR/.cache/pip
+  POETRY_CACHE_DIR: $CI_PROJECT_DIR/.cache/poetry
+  POETRY_VIRTUALENVS_IN_PROJECT: 'true'
+
+cache:
+  paths:
+    - .cache/pip
+    - .cache/poetry
+    - .venv/
+
+.poetry_setup: &poetry_setup
+  before_script:
+    - make develop
+
+stages:
+  - lint
+  - test
+  - build
+  - deploy
+
+lint:
+  stage: lint
+  interruptible: true
+  <<: *poetry_setup
+  script:
+    - make lint-ci
+
+test:
+  stage: test
+  interruptible: true
+  services:
+    - name: postgres:16
+      alias: db
+
+  variables:
+    POSTGRES_USER: pguser
+    POSTGRES_PASSWORD: pgpass
+    POSTGRES_DB: pgdb
+
+    APP_DB_USER: pguser
+    APP_DB_PASSWORD: pgpass
+    APP_DB_NAME: pgdb
+    APP_DB_HOST: db
+
+  <<: *poetry_setup
+  script:
+    - make test-ci
+  coverage: /TOTAL.*\s+(\d+%)$/
+  artifacts:
+    expire_in: 1 week
+
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+      junit: junit.xml
+
